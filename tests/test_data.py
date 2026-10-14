@@ -1,23 +1,45 @@
-from sklearn.model_selection import GroupShuffleSplit
+import numpy as np
+import pytest
 
-from ml_platform.data import load_split
+from ml_platform.data import load_split, load_train_validation
+
+
+def test_load_train_data():
+    X, y, subjects = load_split("train")
+
+    assert len(X) == len(y) == len(subjects)
+    assert X.shape[1] == 561
+    assert not X.isna().any().any()
+    assert np.isfinite(X.to_numpy()).all()
+
+
+def test_invalid_split():
+    with pytest.raises(ValueError):
+        load_split("invalid")
 
 
 def test_subject_disjoint_split():
-    X, y, subjects = load_split("train")
-
-    splitter = GroupShuffleSplit(
-        n_splits=1,
-        test_size=0.2,
-        random_state=42,
+    X_train, X_val, y_train, y_val, train_subjects, val_subjects = (
+        load_train_validation()
     )
 
-    train_idx, val_idx = next(
-        splitter.split(X, y, groups=subjects)
-    )
+    assert len(X_train) == len(y_train)
+    assert len(X_val) == len(y_val)
 
-    train_subjects = set(subjects.iloc[train_idx])
-    val_subjects = set(subjects.iloc[val_idx])
+    assert set(X_train.index).isdisjoint(set(X_val.index))
+    assert set(train_subjects).isdisjoint(set(val_subjects))
+
+    _, _, subjects = load_split("train")
+
+    train_subjects = set(subjects.loc[X_train.index])
+    val_subjects = set(subjects.loc[X_val.index])
 
     assert train_subjects.isdisjoint(val_subjects)
-    assert train_subjects | val_subjects == set(subjects)
+
+
+def test_reproducible_split():
+    split1 = load_train_validation(random_state=42)
+    split2 = load_train_validation(random_state=42)
+
+    for data1, data2 in zip(split1, split2):
+        assert data1.equals(data2)

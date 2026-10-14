@@ -52,9 +52,7 @@ def load_train_validation(test_size=0.2, random_state=42):
         random_state=random_state,
     )
 
-    train_idx, val_idx = next(
-        splitter.split(X, y, groups=subjects)
-    )
+    train_idx, val_idx = next(splitter.split(X, y, groups=subjects))
 
     X_train = X.iloc[train_idx]
     X_val = X.iloc[val_idx]

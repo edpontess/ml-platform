@@ -12,9 +12,11 @@ from ml_platform.config import TrainingConfig
 def main():
     print("Loading dataset...")
 
-    X_train, X_val, y_train, y_val, train_subjects, val_subjects = load_train_validation(
-        test_size=TrainingConfig().validation_size,
-        random_state=TrainingConfig().random_state,
+    X_train, X_val, y_train, y_val, train_subjects, val_subjects = (
+        load_train_validation(
+            test_size=TrainingConfig().validation_size,
+            random_state=TrainingConfig().random_state,
+        )
     )
 
     print(f"Training samples: {len(X_train)}")
