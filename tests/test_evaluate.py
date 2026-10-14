@@ -1,6 +1,5 @@
 import numpy as np
 import pytest
-
 from sklearn.dummy import DummyClassifier
 
 from ml_platform.evaluate import evaluate_model

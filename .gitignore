@@ -23,3 +23,9 @@ mlartifacts/
 *.tfstate.*
 *.tfvars
 !*.tfvars.example
+
+# MLflow
+mlflow.db
+mlflow.db-*
+mlartifacts/
+mlruns/
