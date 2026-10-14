@@ -6,12 +6,16 @@ import joblib
 from ml_platform.data import load_split, load_train_validation
 from ml_platform.evaluate import evaluate_model
 from ml_platform.features import build_pipeline
+from ml_platform.config import TrainingConfig
 
 
 def main():
     print("Loading dataset...")
 
-    X_train, X_val, y_train, y_val, train_subjects, val_subjects = load_train_validation()
+    X_train, X_val, y_train, y_val, train_subjects, val_subjects = load_train_validation(
+        test_size=TrainingConfig().validation_size,
+        random_state=TrainingConfig().random_state,
+    )
 
     print(f"Training samples: {len(X_train)}")
     print(f"Validation samples: {len(X_val)}")
@@ -20,7 +24,9 @@ def main():
 
     print("Training model...")
 
-    model = build_pipeline()
+    config = TrainingConfig()
+
+    model = build_pipeline(config)
     model.fit(X_train, y_train)
 
     print("Evaluating on validation set...")
