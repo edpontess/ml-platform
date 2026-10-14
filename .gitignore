@@ -1,11 +1,25 @@
 .venv/
 __pycache__/
 *.pyc
+.pytest_cache/
+.ruff_cache/
+
+# Environment variables
 .env
+.env.*
+
+# macOS
 .DS_Store
-data/
+
+# Local datasets and artifacts
+data/*
+!data/.gitkeep
 mlruns/
 mlartifacts/
+
+# Terraform
 .terraform/
 *.tfstate
 *.tfstate.*
+*.tfvars
+!*.tfvars.example
