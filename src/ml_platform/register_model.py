@@ -1,7 +1,7 @@
 import mlflow
 from mlflow import MlflowClient
 
-TRACKING_URI = "http://127.0.0.1:5000"
+TRACKING_URI = "http://127.0.0.1:5001"
 EXPERIMENT_NAME = "human-activity-recognition"
 MODEL_NAME = "human-activity-classifier"
 

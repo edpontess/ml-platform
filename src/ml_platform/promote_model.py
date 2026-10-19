@@ -7,7 +7,7 @@ from mlflow import MlflowClient
 from ml_platform.data import load_train_validation
 from ml_platform.evaluate import evaluate_model
 
-TRACKING_URI = "http://127.0.0.1:5000"
+TRACKING_URI = "http://127.0.0.1:5001"
 MODEL_NAME = "human-activity-classifier"
 
 MIN_F1_IMPROVEMENT = 0.01
