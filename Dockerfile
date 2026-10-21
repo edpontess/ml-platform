@@ -1,20 +1,23 @@
 FROM python:3.12-slim
 
-# Copy the uv package manager
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
 WORKDIR /app
 
-# Install dependencies
 COPY pyproject.toml uv.lock ./
+
 RUN uv sync --frozen --no-dev --no-install-project
 
-# Copy application code
 COPY src/ ./src/
 
-# Make our Python package importable
+# Package the approved model with the application.
+COPY models/champion/ ./models/champion/
+
 ENV PYTHONPATH=/app/src
 ENV PATH="/app/.venv/bin:$PATH"
+
+# Load the packaged model instead of contacting MLflow.
+ENV MODEL_URI=/app/models/champion
 
 EXPOSE 8000
 

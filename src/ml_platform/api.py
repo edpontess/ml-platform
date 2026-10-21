@@ -12,7 +12,10 @@ TRACKING_URI = os.getenv(
     "MLFLOW_TRACKING_URI",
     "http://127.0.0.1:5000",
 )
-MODEL_URI = "models:/human-activity-classifier@champion"
+MODEL_URI = os.getenv(
+    "MODEL_URI",
+    "models:/human-activity-classifier@champion",
+)
 
 N_FEATURES = 561
 

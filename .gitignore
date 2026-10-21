@@ -8,6 +8,9 @@ __pycache__/
 .env
 .env.*
 
+# Credentials
+access_key
+
 # macOS
 .DS_Store
 
