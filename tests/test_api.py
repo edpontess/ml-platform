@@ -11,10 +11,13 @@ def client():
     model = MagicMock()
     model.predict.return_value = [5]
 
-    with patch(
-        "ml_platform.api.mlflow.pyfunc.load_model",
-        return_value=model,
-    ), TestClient(app) as test_client:
+    with (
+        patch(
+            "ml_platform.api.mlflow.pyfunc.load_model",
+            return_value=model,
+        ),
+        TestClient(app) as test_client,
+    ):
         yield test_client, model
 
     app.state.model = None
@@ -92,9 +95,7 @@ def test_unknown_prediction_class(client):
     )
 
     assert response.status_code == 500
-    assert response.json()["detail"] == (
-        "Model returned an unknown activity class"
-    )
+    assert response.json()["detail"] == ("Model returned an unknown activity class")
 
 
 def test_model_unavailable(client):
