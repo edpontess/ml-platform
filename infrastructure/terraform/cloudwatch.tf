@@ -1,9 +1,9 @@
 resource "aws_cloudwatch_log_group" "api" {
-  name              = "/ecs/ml-platform-api"
-  retention_in_days = 7
+  name              = var.log_group_name
+  retention_in_days = var.log_retention_days
 
   tags = {
-    Project     = "ml-platform"
-    Environment = "dev"
+    Project     = var.project_name
+    Environment = var.environment
   }
 }
