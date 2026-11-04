@@ -1,5 +1,6 @@
-import httpx
 import os
+
+import httpx
 
 from ml_platform.data import load_split
 

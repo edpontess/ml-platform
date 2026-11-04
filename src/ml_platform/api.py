@@ -1,10 +1,10 @@
+import os
 from contextlib import asynccontextmanager
 
 import mlflow
 import mlflow.pyfunc
 import numpy as np
 import pandas as pd
-import os
 from fastapi import FastAPI, HTTPException, Request
 from pydantic import BaseModel, Field, field_validator
 

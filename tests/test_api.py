@@ -6,7 +6,6 @@ from fastapi.testclient import TestClient
 from ml_platform.api import app
 
 
-
 @pytest.fixture
 def client():
     model = MagicMock()
@@ -15,9 +14,8 @@ def client():
     with patch(
         "ml_platform.api.mlflow.pyfunc.load_model",
         return_value=model,
-    ):
-        with TestClient(app) as test_client:
-            yield test_client, model
+    ), TestClient(app) as test_client:
+        yield test_client, model
 
     app.state.model = None
 
