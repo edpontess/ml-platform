@@ -1,7 +1,9 @@
 import httpx
+import os
 
 from ml_platform.data import load_split
 
+API_URL = os.getenv("API_URL", "http://127.0.0.1:8000")
 
 def main():
     X_test, y_test, _ = load_split("test")
@@ -10,7 +12,7 @@ def main():
     actual = int(y_test.iloc[0])
 
     response = httpx.post(
-        "http://127.0.0.1:8000/predict",
+        f"{API_URL}/predict",
         json={"features": sample},
         timeout=30.0,
     )

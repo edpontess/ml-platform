@@ -1,18 +1,18 @@
 resource "aws_ecr_repository" "ml_platform_api" {
   name                 = "ml-platform-api"
-  image_tag_mutability = "IMMUTABLE"
+  image_tag_mutability = "MUTABLE"
 
   image_scanning_configuration {
-    scan_on_push = true
+    scan_on_push = false
   }
 
   encryption_configuration {
     encryption_type = "AES256"
   }
 
-  tags = {
-    Project     = "ml-platform"
-    Environment = "dev"
-    ManagedBy   = "terraform"
-  }
+  # tags = {
+  #  Project     = "ml-platform"
+  #  Environment = "dev"
+  #  ManagedBy   = "terraform"
+  #}
 }

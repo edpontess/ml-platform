@@ -10,6 +10,6 @@ terraform {
 }
 
 provider "aws" {
-  region  = "eu-west-1"
-  profile = "ml-platform"
+  region  = var.aws_region
+  profile = var.aws_profile
 }
