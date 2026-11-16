@@ -18,6 +18,7 @@ data "aws_iam_policy_document" "github_deploy" {
     sid = "ECRPush"
     actions = [
       "ecr:BatchCheckLayerAvailability",
+      "ecr:BatchGetImage",
       "ecr:CompleteLayerUpload",
       "ecr:InitiateLayerUpload",
       "ecr:PutImage",
@@ -66,6 +67,27 @@ data "aws_iam_policy_document" "github_deploy" {
     resources = [
       "${aws_s3_bucket.model_artifacts.arn}/champion/*"
     ]
+  }
+
+  statement {
+    sid = "ListChampionModel"
+
+    actions = [
+      "s3:ListBucket"
+    ]
+
+    resources = [
+      aws_s3_bucket.model_artifacts.arn
+    ]
+
+    condition {
+      test     = "StringLike"
+      variable = "s3:prefix"
+      values = [
+        "champion/",
+        "champion/*"
+      ]
+    }
   }
 }
 
