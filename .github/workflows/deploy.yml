@@ -1,4 +1,4 @@
-name: Deploy to AWS ECS
+name: Build and Deploy ML API
 
 on:
   workflow_dispatch:
@@ -19,8 +19,37 @@ env:
   CONTAINER_NAME: ml-platform-api
 
 jobs:
+  verify-ci:
+    name: Verify CI passed
+    runs-on: ubuntu-latest
+
+    permissions:
+      actions: read
+      contents: read
+
+    steps:
+      - name: Check CI status for this commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          COMMIT_SHA: ${{ github.sha }}
+          REPO: ${{ github.repository }}
+        run: |
+          conclusion=$(gh api \
+            "repos/$REPO/actions/workflows/ci.yml/runs" \
+            -f head_sha="$COMMIT_SHA" \
+            -f status=completed \
+            -f per_page=100 \
+            --jq '[.workflow_runs[] | select(.event == "push" and .head_branch == "main" and .conclusion == "success")] | length')
+
+          if [ "$conclusion" -eq 0 ]; then
+            echo "::error::No successful CI run found for commit $COMMIT_SHA on main"
+            exit 1
+          fi
+
+          echo "CI passed for commit $COMMIT_SHA"
   deploy:
-    name: Build and Deploy
+    name: Build Docker Image and Deploy to ECS
+    needs: verify-ci
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
 
