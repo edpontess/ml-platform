@@ -34,19 +34,20 @@ jobs:
           COMMIT_SHA: ${{ github.sha }}
           REPO: ${{ github.repository }}
         run: |
-          conclusion=$(gh api \
+            conclusion=$(gh api \
+            --method GET \
             "repos/$REPO/actions/workflows/ci.yml/runs" \
             -f head_sha="$COMMIT_SHA" \
             -f status=completed \
             -f per_page=100 \
             --jq '[.workflow_runs[] | select(.event == "push" and .head_branch == "main" and .conclusion == "success")] | length')
 
-          if [ "$conclusion" -eq 0 ]; then
+            if [ "$conclusion" -eq 0 ]; then
             echo "::error::No successful CI run found for commit $COMMIT_SHA on main"
             exit 1
-          fi
+            fi
 
-          echo "CI passed for commit $COMMIT_SHA"
+            echo "CI passed for commit $COMMIT_SHA"
   deploy:
     name: Build Docker Image and Deploy to ECS
     needs: verify-ci
