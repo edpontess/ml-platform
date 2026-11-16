@@ -114,7 +114,7 @@ variable "task_cpu_architecture" {
 
 variable "desired_count" {
   type    = number
-  default = 1
+  default = 0
 }
 
 variable "assign_public_ip" {

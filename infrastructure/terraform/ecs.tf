@@ -58,4 +58,11 @@ resource "aws_ecs_service" "api" {
     Project     = var.project_name
     Environment = var.environment
   }
+
+  lifecycle {
+    ignore_changes = [
+      task_definition
+    ]
+  }
 }
+
