@@ -1,4 +1,6 @@
+import logging
 import os
+import time
 from contextlib import asynccontextmanager
 
 import mlflow
@@ -7,6 +9,8 @@ import numpy as np
 import pandas as pd
 from fastapi import FastAPI, HTTPException, Request
 from pydantic import BaseModel, Field, field_validator
+
+from ml_platform.logging_config import configure_logging
 
 TRACKING_URI = os.getenv(
     "MLFLOW_TRACKING_URI",
@@ -45,17 +49,43 @@ class PredictionResponse(BaseModel):
     activity: str
 
 
+configure_logging()
+logger = logging.getLogger("ml_platform.api")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     mlflow.set_tracking_uri(TRACKING_URI)
 
-    # Load the champion once, when the application starts.
-    app.state.model = mlflow.pyfunc.load_model(MODEL_URI)
+    logger.info(
+        "Loading model",
+        extra={"event": "model_loading"},
+    )
+
+    try:
+        # Load the champion once, when the application starts.
+        app.state.model = mlflow.pyfunc.load_model(MODEL_URI)
+    except Exception:
+        logger.exception(
+            "Failed to load model",
+            extra={"event": "model_loading_failed"},
+        )
+        raise
+
+    logger.info(
+        "Model loaded successfully",
+        extra={"event": "model_loaded"},
+    )
 
     yield
 
     # Release the reference when the application stops.
     app.state.model = None
+
+    logger.info(
+        "Application shutting down",
+        extra={"event": "application_shutdown"},
+    )
 
 
 app = FastAPI(
@@ -64,6 +94,49 @@ app = FastAPI(
     version="0.1.0",
     lifespan=lifespan,
 )
+
+
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    start_time = time.perf_counter()
+
+    try:
+        response = await call_next(request)
+    except Exception:
+        duration_ms = round(
+            (time.perf_counter() - start_time) * 1000,
+            2,
+        )
+
+        logger.exception(
+            "Unhandled HTTP request error",
+            extra={
+                "event": "http_request",
+                "method": request.method,
+                "path": request.url.path,
+                "status_code": 500,
+                "duration_ms": duration_ms,
+            },
+        )
+        raise
+
+    duration_ms = round(
+        (time.perf_counter() - start_time) * 1000,
+        2,
+    )
+
+    logger.info(
+        "HTTP request completed",
+        extra={
+            "event": "http_request",
+            "method": request.method,
+            "path": request.url.path,
+            "status_code": response.status_code,
+            "duration_ms": duration_ms,
+        },
+    )
+
+    return response
 
 
 @app.get("/health")
@@ -87,7 +160,22 @@ def predict(payload: PredictionRequest, request: Request):
     # One row, 561 features.
     X = pd.DataFrame([payload.features], columns=range(N_FEATURES))
 
+    start_time = time.perf_counter()
+
     prediction = int(model.predict(X)[0])
+
+    inference_duration_ms = round(
+        (time.perf_counter() - start_time) * 1000,
+        2,
+    )
+
+    logger.info(
+        "Model inference completed",
+        extra={
+            "event": "model_inference",
+            "duration_ms": inference_duration_ms,
+        },
+    )
 
     if prediction not in ACTIVITY_LABELS:
         raise HTTPException(

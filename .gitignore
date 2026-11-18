@@ -10,6 +10,7 @@ __pycache__/
 
 # Credentials
 access_key
+github_deploy_access_key.json
 
 # macOS
 .DS_Store

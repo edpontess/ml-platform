@@ -8,7 +8,7 @@ MLflow for experiment tracking/model registry and FastAPI for model serving.
 - Python >= 3.12
 - [uv](https://docs.astral.sh/uv/) package manager
 - [Docker](https://www.docker.com/) (only for running the API in a container)
-- [AWS CLI](https://aws.amazon.com/cli/) and [Terraform](https://www.terraform.io/) (only for the AWS deployment, step 8)
+- [AWS CLI](https://aws.amazon.com/cli/) and [Terraform](https://www.terraform.io/) (only for the AWS deployment, steps 8-9)
 
 ## Contents
 
@@ -17,7 +17,7 @@ MLflow for experiment tracking/model registry and FastAPI for model serving.
 - [Setup](#setup)
 - Local pipeline: [1. MLflow server](#1-start-the-mlflow-tracking-server), [2. Train](#2-train-a-model), [3. Register](#3-register-the-best-model), [4. Promote](#4-promote-the-model-to-champion), [5. Try locally](#5-try-the-registered-model-locally)
 - Serving: [6. Local API](#6-serve-the-model-via-the-api-local), [7. Docker](#7-serve-the-model-via-the-api-docker)
-- Deployment: [8. AWS ECS Fargate](#8-deploy-to-aws-ecs-fargate)
+- Deployment: [8. AWS ECS Fargate](#8-deploy-to-aws-ecs-fargate), [9. CI/CD with GitHub Actions](#9-cicd-with-github-actions)
 - [API reference](#api-reference)
 - [Troubleshooting](#troubleshooting)
 - [Running tests](#running-tests)
@@ -36,15 +36,23 @@ MLflow for experiment tracking/model registry and FastAPI for model serving.
 | `tests/` | Unit tests |
 | `Dockerfile` | Image for the API |
 | `models/champion/` | Exported `champion` model packaged into the standalone image |
-| `infrastructure/terraform/` | AWS infrastructure (ECR, ECS Fargate, IAM, networking, logs) |
+| `.github/workflows/ci.yml` | Lint, format check and tests on every push/PR to `main` |
+| `.github/workflows/deploy.yml` | Manual build and deploy of the API image to ECS |
+| `infrastructure/terraform/` | AWS infrastructure (ECR, ECS Fargate, IAM, networking, logs, S3 model bucket, GitHub deploy user) |
 | `data/` | UCI HAR dataset |
 
 ## Pipeline overview
 
 ```
 train -> register -> promote (champion) -> export -> build image -> push to ECR -> run on ECS Fargate
+                                              |                          ^
+                                              |                          | GitHub Actions (manual deploy)
+                                              |-> upload to S3 ----------+
                                               \-> serve locally (uvicorn or Docker)
 ```
+
+CI (`ci.yml`) runs automatically on every push and pull request to `main`. Deployment
+(`deploy.yml`) is triggered manually and only runs for a commit whose CI run succeeded.
 
 ## Setup
 
@@ -223,6 +231,8 @@ standalone image is used, so MLflow is not needed in AWS.
 | IAM execution role | `iam.tf` | Lets ECS pull from ECR and write logs |
 | Security group, default VPC lookup | `network.tf` | Inbound `8000` only from `allowed_client_cidr` |
 | CloudWatch log group | `cloudwatch.tf` | `/ecs/ml-platform-api`, 7-day retention |
+| S3 bucket | `model_artifacts.tf` | `ml-platform-model-artifacts-<account-id>`, versioned, public access blocked; holds the `champion/` model for CI/CD |
+| IAM user + inline policy | `github_deploy.tf` | `ml-platform-github-deploy`, used by GitHub Actions (see step 9) |
 
 The service runs in the default VPC with a public IP and no load balancer, so the IP changes
 every time the task restarts.
@@ -270,7 +280,11 @@ cd infrastructure/terraform
 terraform apply
 ```
 
-To release a new version, push a new tag (e.g. `v2`) and apply with `-var image_tag=v2`.
+To release a new version manually, push a new tag (e.g. `v2`) and apply with `-var image_tag=v2`.
+The automated pipeline in step 9 is the preferred way once the infrastructure exists.
+
+> The ECS service ignores changes to `task_definition` (`lifecycle.ignore_changes`), so
+> deployments made by GitHub Actions are not reverted by a later `terraform apply`.
 
 ### Find the API address and test it
 
@@ -312,6 +326,69 @@ Use `--desired-count 1` to start it again. Terraform owns `desired_count`, so th
 terraform destroy
 ```
 
+## 9. CI/CD with GitHub Actions
+
+### CI
+
+[ci.yml](.github/workflows/ci.yml) runs on every push and pull request to `main`: installs
+dependencies with `uv sync --frozen`, downloads the UCI HAR dataset (it is not stored in
+Git), then runs `ruff check`, `ruff format --check` and `pytest`. Run the same checks
+locally before pushing:
+
+```bash
+uv run ruff check .
+uv run ruff format --check .
+uv run pytest
+```
+
+### Deployment
+
+[deploy.yml](.github/workflows/deploy.yml) is started manually from the **Actions** tab
+(`workflow_dispatch`, branch `main`). It runs two jobs:
+
+1. **Verify CI passed**: queries the GitHub API and fails unless a successful `CI` push run
+   exists for the commit being deployed.
+2. **Build Docker Image and Deploy to ECS**:
+   1. Authenticates to AWS with the deploy user's credentials.
+   2. Syncs the `champion` model from `s3://ml-platform-model-artifacts-<account-id>/champion/`
+      into `models/champion/`.
+   3. Builds the ARM64 image and pushes it to ECR tagged with the commit SHA.
+   4. Copies the current ECS task definition, replaces the image and registers a new revision.
+   5. Updates the ECS service (it does not wait for the service to become stable).
+
+Deployments are serialised (`concurrency: ecs-deployment`) and never cancelled mid-run.
+
+### One-time setup
+
+1. Apply Terraform (step 8). This creates the S3 bucket and the `ml-platform-github-deploy`
+   IAM user. Its policy allows only ECR push, ECS task definition/service updates,
+   `iam:PassRole` for the ECS execution role, and read access to `champion/` in the bucket.
+2. Create an access key for the deploy user:
+
+   ```bash
+   aws iam create-access-key --user-name ml-platform-github-deploy --profile ml-platform
+   ```
+
+3. Add the values as GitHub repository secrets `AWS_ACCESS_KEY_ID` and
+   `AWS_SECRET_ACCESS_KEY` (Settings > Secrets and variables > Actions). Do not commit the
+   key. If you keep a local copy, use a gitignored file such as `access_key` or
+   `github_deploy_access_key.json`.
+4. Rotate the key if it is ever exposed: create a new one, update the secrets, then delete
+   the old key with `aws iam delete-access-key`.
+
+### Publishing a new champion model
+
+The deployment image is built from the model in S3, not from the copy in Git. After
+promoting a new `champion` (steps 1-4), export and upload it:
+
+```bash
+uv run python -m ml_platform.export_model
+aws s3 sync models/champion/ s3://ml-platform-model-artifacts-<account-id>/champion/ \
+  --delete --profile ml-platform
+```
+
+Then run the **Build and Deploy ML API** workflow.
+
 ## API reference
 
 - Health check: `GET http://localhost:8000/health`
@@ -345,6 +422,10 @@ Activities: `WALKING`, `WALKING_UPSTAIRS`, `WALKING_DOWNSTAIRS`, `SITTING`, `STA
 | API request times out on AWS | Your IP changed; update `allowed_client_cidr` and re-apply, or the task is scaled to 0 |
 | Public IP no longer works | Task restarted and got a new IP; look it up again (step 8) |
 | `terraform plan` asks for `allowed_client_cidr` or fails validation | Provide a valid IPv4 with a `/32` suffix |
+| Deploy workflow fails with `No successful CI run found` | CI has not passed for that commit on `main`; wait for or fix CI, then re-run |
+| Deploy workflow fails at `aws s3 sync` or ECR push with `AccessDenied` | The deploy user's policy in `github_deploy.tf` is missing a permission; update it and `terraform apply` |
+| Deploy workflow fails at `Configure AWS credentials` | `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` secrets are missing or the key was deleted |
+| CI fails in `Run tests` with missing dataset files | The dataset download step failed; check the UCI URL in `ci.yml` |
 
 ## Running tests
 
